@@ -1,0 +1,7 @@
+vendor
+.env
+.env.*
+!.env.production.example
+storage/logs
+tests
+.phpunit.result.cache
