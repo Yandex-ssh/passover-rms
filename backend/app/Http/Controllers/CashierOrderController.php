@@ -6,6 +6,8 @@ use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Services\CashierOrderService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CashierOrderController extends Controller
@@ -18,13 +20,16 @@ class CashierOrderController extends Controller
     /**
      * List orders waiting for cashier processing.
      */
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
+        $filters = $request->validate(['status' => ['sometimes', Rule::in(['all', 'pending', 'confirmed', 'preparing', 'completed', 'rejected', 'cancelled'])]]);
+        $status = $filters['status'] ?? 'pending';
         $orders = Order::query()
-            ->where('status', 'pending')
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->with([
                 'tableSession.restaurantTable',
                 'items.menuItem',
+                'kitchenTicket',
             ])
             ->orderBy('submitted_at')
             ->orderBy('id')
@@ -36,9 +41,9 @@ class CashierOrderController extends Controller
     /**
      * Confirm a pending order and deduct inventory.
      */
-    public function confirm(Order $order): JsonResponse
+    public function confirm(Request $request, Order $order): JsonResponse
     {
-        $order = $this->cashierOrderService->confirmOrder($order);
+        $order = $this->cashierOrderService->confirmOrder($order, $request->user());
 
         return response()->json([
             'data' => new OrderResource($order),

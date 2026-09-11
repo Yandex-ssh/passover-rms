@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\MenuItemResource;
 use App\Models\MenuItem;
 use App\Models\Inventory;
+use App\Models\OrderItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -156,6 +157,12 @@ class MenuItemController extends Controller
      */
     public function destroy(MenuItem $menuItem): JsonResponse
     {
+        if (OrderItem::query()->where('menu_item_id', $menuItem->id)->exists()) {
+            return response()->json([
+                'message' => 'This menu item cannot be deleted because it belongs to an existing order. Mark it unavailable instead.',
+            ], 422);
+        }
+
         $menuItem->delete();
 
         return response()->json([

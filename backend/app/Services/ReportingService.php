@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReportingService
 {
+    public function __construct(private readonly BestSellingService $bestSelling) {}
+
     private const ACCEPTED_ORDER_STATUSES = ['confirmed', 'preparing', 'completed'];
 
     public function sales(?string $from, ?string $to): array
@@ -104,11 +106,7 @@ class ReportingService
 
     public function menuItems(?string $from, ?string $to): array
     {
-        $rows = $this->acceptedItems()->with('menuItem')->whereHas('order', fn ($q) => $q->whereIn('dining_transaction_id', $this->paidTransactions($from, $to)->pluck('id')))->get();
-
-        return $rows->groupBy('menu_item_id')->map(function ($items, $id) {
-            return ['menu_item_id' => (int) $id, 'name' => $items->first()->menuItem->name, 'quantity_sold' => (int) $items->sum('quantity'), 'sales_amount' => $this->money($items->sum(fn ($i) => $this->cents($i->subtotal))), 'order_count' => $items->pluck('order_id')->unique()->count()];
-        })->sortBy([['quantity_sold', 'desc'], ['sales_amount', 'desc']])->values()->all();
+        return $this->bestSelling->ranked($from, $to);
     }
 
     public function inventory(): array

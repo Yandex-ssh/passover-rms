@@ -25,6 +25,8 @@ const paths = {
   coffee: 'M4 8h13v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z M17 9h2a3 3 0 0 1 0 6h-2 M7 2v3 M12 2v3 M2 23h18',
   bars: 'M3 6h18 M3 12h18 M3 18h18',
   download: 'M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4',
+  calendar: 'M5 4v3 M19 4v3 M4 9h16 M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
 }
 export function Icon({ name, size = 19 }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.dashboard} /></svg> }
 export function Button({ children, icon, primary, className = '', ...props }) { return <button className={`a-button ${primary ? 'primary' : ''} ${className}`} {...props}>{icon && <Icon name={icon} size={16} />}{children}</button> }

@@ -21,6 +21,7 @@ class Payment extends Model
         'idempotency_key',
         'status',
         'paid_at',
+        'processed_by',
     ];
 
     protected $casts = [
@@ -33,5 +34,10 @@ class Payment extends Model
     public function diningTransaction(): BelongsTo
     {
         return $this->belongsTo(DiningTransaction::class);
+    }
+
+    public function processedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'processed_by');
     }
 }

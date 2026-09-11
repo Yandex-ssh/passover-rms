@@ -83,6 +83,7 @@ class ReportingApiTest extends TestCase
 
     public function test_menu_item_inventory_and_movement_reports_are_available(): void
     {
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-08 11:00:00', 'UTC'));
         [$transaction, $item] = $this->createPaidTransaction('2026-09-08 11:00:00', 125, 2);
         Payment::create($this->paymentAttributes($transaction, 'gcash', '250.00', null, null, 'menu-report', 'M-1'));
         $inventory = $item->inventory;

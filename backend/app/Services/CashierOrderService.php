@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\Order;
+use App\Models\TableSession;
+use App\Models\User;
 use App\Services\KitchenTicketService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,9 +23,13 @@ class CashierOrderService
     /**
      * Confirm a pending order and deduct its inventory atomically.
      */
-    public function confirmOrder(Order $order): Order
+    public function confirmOrder(Order $order, User $actor): Order
     {
-        return DB::transaction(function () use ($order): Order {
+        return DB::transaction(function () use ($order, $actor): Order {
+            $session = TableSession::query()->lockForUpdate()->findOrFail($order->table_session_id);
+            if ($session->status !== 'active') {
+                throw new ConflictHttpException('Orders in a closed dining session cannot be confirmed.');
+            }
             $lockedOrder = Order::query()
                 ->whereKey($order->id)
                 ->lockForUpdate()
@@ -93,6 +99,7 @@ class CashierOrderService
             $lockedOrder->update([
                 'status' => 'confirmed',
                 'confirmed_at' => now(),
+                'confirmed_by' => $actor->id,
             ]);
 
             $this->billingService->attachConfirmedOrder($lockedOrder);

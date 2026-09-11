@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,7 +25,7 @@ class RestaurantTableController extends Controller
      */
     public function index(): AnonymousResourceCollection
     {
-        $tables = RestaurantTable::latest()->get();
+        $tables = RestaurantTable::with('activeSession')->latest()->get();
 
         return RestaurantTableResource::collection($tables);
     }
@@ -75,7 +77,14 @@ class RestaurantTableController extends Controller
             'status'       => ['sometimes', 'required', 'string', Rule::in(['available', 'occupied', 'reserved'])],
         ]);
 
-        $restaurantTable->update($validated);
+        DB::transaction(function () use ($restaurantTable, $validated): void {
+            $table = RestaurantTable::query()->lockForUpdate()->findOrFail($restaurantTable->id);
+            if (isset($validated['status']) && $validated['status'] !== 'occupied' && $table->activeSession()->exists()) {
+                throw ValidationException::withMessages(['status' => ['Close the active dining session through the cashier workspace before changing table availability.']]);
+            }
+            $table->update($validated);
+        });
+        $restaurantTable->refresh();
 
         return (new RestaurantTableResource($restaurantTable))
             ->additional([

@@ -22,6 +22,11 @@ class OrderService
             ->where('qr_token', $qrToken)
             ->firstOrFail();
 
+        return $this->submitTableOrder($restaurantTable, $data);
+    }
+
+    public function submitTableOrder(RestaurantTable $restaurantTable, array $data): Order
+    {
         return DB::transaction(function () use ($restaurantTable, $data) {
             $restaurantTable = RestaurantTable::query()
                 ->lockForUpdate()

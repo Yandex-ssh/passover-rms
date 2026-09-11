@@ -3,25 +3,46 @@ import { get, post, put } from '../api'
 import { Badge, Button, DataState, Empty, ErrorMessage, Field, Icon, Metric, Modal, PageHeading, Pagination, Panel, Table, Tabs } from '../admin/shared'
 import { currency, dateTime, go, queryString, useData } from '../admin/data'
 import { ReportsPage as SharedReportsPage } from '../admin/Overview'
+import { usePollingData } from '../api/usePollingData'
+import { CloseSession, KitchenSlipPreview, OrderEntry } from './ServiceDialogs'
 
 const tableNumber = (record) => record?.table_session?.table?.table_number
   || record?.table_session?.restaurant_table?.table_number
   || record?.table?.table_number || '—'
 
 export function CashierDashboard() {
-  const resource = useData('/cashier/dashboard', '/cashier/reports/transactions')
+  const resource = useData('/cashier/dashboard?limit=7', '/cashier/reports/transactions')
   const data = resource.data?.[0]?.data
   const transactions = resource.data?.[1]
-  const activeOrders = data ? data.orders.pending + data.orders.confirmed + data.orders.preparing : 0
-  return <><PageHeading eyebrow="Shift overview" title="Dashboard" description="Current service and payment activity." /><DataState resource={resource}>{data && <><div className="a-metrics"><Metric icon="orders" label="Active orders" value={activeOrders} note="Open order board" onClick={() => go('/cashier/orders')} /><Metric icon="alert" label="Pending orders" value={data.orders.pending} note="Awaiting confirmation" onClick={() => go('/cashier/orders')} /><Metric icon="transactions" label="Open transactions" value={data.transactions.open + data.transactions.partially_paid} note="Open transaction list" onClick={() => go('/cashier/transactions')} /><Metric icon="reports" label="Sales today" value={currency(data.sales.total)} note={`${data.sales.paid_transactions} paid transactions`} /></div><div className="a-columns"><Panel title="Active order status"><div className="cashier-status-list">{['pending', 'confirmed', 'preparing'].map((status) => <button key={status} onClick={() => go(`/cashier/orders?status=${status}`)}><Badge value={status} /><strong>{data.orders[status]}</strong></button>)}</div></Panel><Panel title="Recent transactions"><Table headings={['Transaction', 'Table', 'Amount', 'Status']} rows={(transactions?.data || []).slice(0, 5).map((row) => <tr key={row.id}><td>{row.transaction_number}</td><td>Table {row.table?.table_number || '—'}</td><td>{currency(row.total_amount)}</td><td><Badge value={row.status} /></td></tr>)} /><Button onClick={() => go('/cashier/transactions')}>View transactions</Button></Panel></div></>}</DataState></>
+  const inventory = data?.inventory || {}
+  const orders = data?.orders || {}
+  const totalOrders = Object.values(orders).reduce((total, value) => total + Number(value || 0), 0)
+  const sufficient = (inventory.tracked_items || 0) - (inventory.low_stock || 0) - (inventory.out_of_stock || 0)
+  return <><PageHeading title="Dashboard" eyebrow="Overview" description="Current service and payment activity."><span className="a-date">{data?.period?.date || new Date().toISOString().slice(0, 10)} · UTC</span></PageHeading><DataState resource={resource}>{data && <><div className="a-metrics a-metrics-five"><Metric icon="transactions" label="Total sales" value={currency(data.sales.total)} note="Paid sales today (UTC)" /><Metric icon="orders" label="Total orders" value={totalOrders} note="View all orders" onClick={() => go('/cashier/orders')} /><Metric icon="alert" label="Low stock items" value={inventory.low_stock || 0} note="View items" onClick={() => go('/cashier/menu')} /><Metric icon="history" label="Transactions" value={transactions?.meta?.total || 0} note="View all" onClick={() => go('/cashier/transactions')} /><Metric icon="inventory" label="Inventory status" value={inventory.tracked_items ? `${Math.round(sufficient / inventory.tracked_items * 100)}%` : '—'} note="Sufficient stock · view details" onClick={() => go('/cashier/menu')} /></div><div className="a-dashboard-columns"><Panel title="Recent transactions" action={<button className="a-text-button" onClick={() => go('/cashier/transactions')}>View all</button>}><Table headings={['ID', 'Table', 'Amount', 'Method', 'Date & time']} rows={(transactions?.data || []).slice(0, 5).map((row) => <tr key={row.id}><td><strong>{row.transaction_number}</strong></td><td>Table {row.table?.table_number || '—'}</td><td>{currency(row.total_amount)}</td><td>{row.payment_methods?.map((method) => method === 'gcash' ? 'GCash' : 'Cash').join(' / ') || '—'}</td><td>{dateTime(row.opened_at)}</td></tr>)} /><div className="a-panel-footer"><Button onClick={() => go('/cashier/transactions')}>View all transactions</Button></div></Panel><Panel title="Low stock items" action={<button className="a-text-button" onClick={() => go('/cashier/menu')}>View all</button>}><Table headings={['Item', 'Current stock', 'Reorder level']} rows={(data.low_stock_items || []).map((item) => <tr key={item.menu_item_id}><td>{item.name}</td><td>{item.quantity}</td><td>{item.low_stock_threshold}</td></tr>)} empty="All tracked items are above their low-stock threshold, or out of stock." /></Panel></div><Panel title="Active order status" action={<button className="a-text-button" onClick={() => go('/cashier/orders')}>View details</button>}><div className="a-metrics"><Metric icon="orders" label="Pending" value={orders.pending || 0} note="Awaiting confirmation" onClick={() => go('/cashier/orders?status=pending')} /><Metric icon="check" label="Confirmed" value={orders.confirmed || 0} note="Ready for kitchen" onClick={() => go('/cashier/orders?status=confirmed')} /><Metric icon="history" label="Preparing" value={orders.preparing || 0} note="In the kitchen" onClick={() => go('/cashier/orders?status=preparing')} /><Metric icon="check" label="Completed" value={orders.completed || 0} note="Ready for billing" onClick={() => go('/cashier/orders?status=completed')} /></div></Panel></>}</DataState></>
 }
 
 export function CashierTables() {
-  const resource = useData('/cashier/tables')
+  const resource = usePollingData('/cashier/tables')
   const [qr, setQr] = useState(null)
+  const [closing, setClosing] = useState(null)
   const [qrError, setQrError] = useState(false)
   const tables = [...(resource.data?.[0]?.data || [])].sort((a, b) => a.table_number.localeCompare(b.table_number, undefined, { numeric: true }))
-  return <><PageHeading eyebrow="Dining floor" title="Tables & QR" description="View table availability and ordering QR codes." /><DataState resource={resource}><div className="a-card-grid a-tables">{tables.map((table) => <article className="a-table-card" key={table.id}><div className="a-card-heading"><div><span className="a-eyebrow">Table</span><h2>{table.table_number.padStart(2, '0')}</h2></div><Badge value={table.status} /></div><p>Seats {table.capacity}</p><Button icon="tables" onClick={() => { setQr(table); setQrError(false) }}>View QR</Button></article>)}</div>{!tables.length && <Empty>No tables available.</Empty>}</DataState>{qr && <Modal title={`Table ${qr.table_number} · Ordering QR`} onClose={() => setQr(null)}><div className="a-qr">{qrError ? <ErrorMessage error={{ message: 'QR code could not be loaded.' }} /> : <img src={`${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/cashier/tables/${qr.id}/qr`} alt={`Ordering QR for table ${qr.table_number}`} onError={() => setQrError(true)} />}<p>Guests can scan this code to order from this table.</p></div></Modal>}</>
+  return <>
+    <PageHeading eyebrow="Dining floor" title="Tables & QR" description="View table availability and close settled dining sessions." />
+    <DataState resource={resource}><div className="a-card-grid a-tables">{tables.map((table) =>
+      <article className="a-table-card" key={table.id}>
+        <div className="a-card-heading"><div><span className="a-eyebrow">Table</span><h2>{table.table_number.padStart(2, '0')}</h2></div><Badge value={table.status} /></div>
+        <p>Seats {table.capacity}</p>
+        <div className="a-actions"><Button icon="tables" onClick={() => { setQr(table); setQrError(false) }}>View QR</Button>
+        {table.active_session && <Button onClick={() => setClosing(table)}>Close session</Button>}</div>
+      </article>)}</div>{!tables.length && <Empty>No tables available.</Empty>}
+    </DataState>
+    {qr && <Modal title={`Table ${qr.table_number} · Ordering QR`} onClose={() => setQr(null)}><div className="a-qr">
+      {qrError ? <ErrorMessage error={{ message: 'QR code could not be loaded.' }} /> : <img src={`${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/cashier/tables/${qr.id}/qr`} alt={`Ordering QR for table ${qr.table_number}`} onError={() => setQrError(true)} />}
+      <p>Guests can scan this code to order from this table.</p>
+    </div></Modal>}
+    {closing && <CloseSession table={closing} onClose={() => setClosing(null)} onClosed={() => { setClosing(null); resource.refresh() }} />}
+  </>
 }
 
 export function CashierCategories() {
@@ -47,21 +68,47 @@ export function CashierMenu() {
 
 export function CashierOrders() {
   const initialStatus = new URLSearchParams(location.search).get('status') || 'all'
-  const [status, setStatus] = useState(['all', 'pending', 'confirmed', 'preparing'].includes(initialStatus) ? initialStatus : 'all')
-  const [revision, setRevision] = useState(0)
+  const statuses = ['all', 'pending', 'confirmed', 'preparing', 'completed', 'rejected', 'cancelled']
+  const [status, setStatus] = useState(statuses.includes(initialStatus) ? initialStatus : 'all')
   const [error, setError] = useState(null)
   const [busyId, setBusyId] = useState(null)
-  const resource = useData(`/cashier/orders?revision=${revision}`, `/kitchen-tickets?revision=${revision}`)
-  useEffect(() => { const timer = setInterval(() => setRevision((value) => value + 1), 5000); return () => clearInterval(timer) }, [])
-  const pending = resource.data?.[0]?.data || []
-  const kitchen = resource.data?.[1]?.data || []
-  const orders = [...pending, ...kitchen.filter((order) => !pending.some((item) => item.id === order.id))]
+  const [creating, setCreating] = useState(false)
+  const [ticketId, setTicketId] = useState(null)
+  const resource = usePollingData('/cashier/orders?status=all')
+  const orders = resource.data?.[0]?.data || []
   const visible = orders.filter((order) => status === 'all' || order.status === status)
-  const process = async (order, action) => { setBusyId(order.id); setError(null); try { const path = order.status === 'pending' ? `/cashier/orders/${order.id}/${action}` : `/kitchen-tickets/${order.id}/${action}`; await post(path, {}); setRevision((value) => value + 1) } catch (e) { setError(e) } finally { setBusyId(null) } }
-  return <><PageHeading eyebrow="Live service" title="Orders" description="Confirm incoming orders and update kitchen progress."><Button icon="history" onClick={() => setRevision((value) => value + 1)}>Refresh</Button></PageHeading><ErrorMessage error={error} /><Tabs values={[["all", 'All'], ["pending", 'Pending'], ["confirmed", 'Confirmed'], ["preparing", 'Preparing']]} value={status} onChange={setStatus} /><DataState resource={resource}><div className="a-card-grid a-orders-grid">{visible.map((order) => <article className="a-order-card" key={order.id}><div className="a-card-heading"><h3>{order.order_number}</h3><Badge value={order.status} /></div><p className="a-order-meta">Table {tableNumber(order)} · {dateTime(order.submitted_at || order.confirmed_at)}</p><div className="a-order-items">{(order.items || []).map((item) => <div key={item.id}><span>{item.quantity} ×</span><div>{item.menu_item?.name || item.menuItem?.name || item.name}{item.special_instruction && <small>{item.special_instruction}</small>}</div></div>)}</div>{order.customer_note && <p className="a-muted">{order.customer_note}</p>}<strong>{currency(order.subtotal)}</strong><div className="a-actions">{order.status === 'pending' && <><Button primary disabled={busyId === order.id} onClick={() => process(order, 'confirm')}>Confirm order</Button><Button disabled={busyId === order.id} onClick={() => process(order, 'reject')}>Reject</Button></>}{order.status === 'confirmed' && <Button primary disabled={busyId === order.id} onClick={() => process(order, 'prepare')}>Mark preparing</Button>}{order.status === 'preparing' && <Button primary disabled={busyId === order.id} onClick={() => process(order, 'complete')}>Complete order</Button>}</div></article>)}</div>{!visible.length && <Empty>No {status === 'all' ? 'active' : status} orders.</Empty>}</DataState></>
+  const process = async (order, action) => {
+    setBusyId(order.id); setError(null)
+    try {
+      const path = order.status === 'pending' ? `/cashier/orders/${order.id}/${action}` : `/kitchen-tickets/${order.id}/${action}`
+      await post(path, {}); resource.refresh()
+    } catch (requestError) { setError(requestError) } finally { setBusyId(null) }
+  }
+  return <>
+    <PageHeading eyebrow="Live service" title="Orders" description="Confirm incoming orders and update kitchen progress."><div className="a-actions"><Button primary icon="plus" onClick={() => setCreating(true)}>New order</Button><Button icon="history" onClick={resource.refresh}>Refresh</Button></div></PageHeading>
+    <ErrorMessage error={error} />
+    <Tabs values={statuses.map((value) => [value, value[0].toUpperCase() + value.slice(1)])} value={status} onChange={setStatus} />
+    <DataState resource={resource}><div className="a-card-grid a-orders-grid">{visible.map((order) =>
+      <article className="a-order-card" key={order.id}>
+        <div className="a-card-heading"><h3>{order.order_number}</h3><Badge value={order.status} /></div>
+        <p className="a-order-meta">Table {tableNumber(order)} · {dateTime(order.submitted_at || order.confirmed_at)}</p>
+        <div className="a-order-items">{(order.items || []).map((item) => <div key={item.id}><span>{item.quantity} ×</span><div>{item.menu_item?.name || item.menuItem?.name || item.name}{item.special_instruction && <small>{item.special_instruction}</small>}</div></div>)}</div>
+        {order.customer_note && <p className="a-muted">{order.customer_note}</p>}
+        <strong>{currency(order.subtotal)}</strong>
+        <div className="a-actions">
+          {order.status === 'pending' && <><Button primary disabled={busyId === order.id} onClick={() => process(order, 'confirm')}>Confirm order</Button><Button disabled={busyId === order.id} onClick={() => process(order, 'reject')}>Reject</Button></>}
+          {order.status === 'confirmed' && <Button primary disabled={busyId === order.id} onClick={() => process(order, 'prepare')}>Mark preparing</Button>}
+          {order.status === 'preparing' && <Button primary disabled={busyId === order.id} onClick={() => process(order, 'complete')}>Complete order</Button>}
+          {order.kitchen_ticket && <Button onClick={() => setTicketId(order.kitchen_ticket.id)}>Kitchen slip</Button>}
+        </div>
+      </article>)}</div>{!visible.length && <Empty>No {status === 'all' ? 'orders' : status} orders.</Empty>}
+    </DataState>
+    {creating && <OrderEntry onClose={() => setCreating(false)} onCreated={() => { setCreating(false); setStatus('pending'); resource.refresh() }} />}
+    {ticketId && <KitchenSlipPreview ticketId={ticketId} onClose={() => setTicketId(null)} />}
+  </>
 }
 
-export function CashierTransactions() {
+export function LegacyCashierTransactions() {
   const [draft, setDraft] = useState({ search: '', status: '' })
   const [filters, setFilters] = useState(draft)
   const [page, setPage] = useState(1)
@@ -112,4 +159,23 @@ export function CashierReportsLegacy() {
 
 export function CashierReports() {
   return <SharedReportsPage scope="cashier" />
+}
+
+export function CashierTransactions() {
+  const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const [view, setView] = useState('today')
+  const [draft, setDraft] = useState({ search: '', status: '' })
+  const [filters, setFilters] = useState(draft)
+  const [page, setPage] = useState(1)
+  const [bill, setBill] = useState(null)
+  const [receiptId, setReceiptId] = useState(null)
+  const [error, setError] = useState(null)
+  const dates = view === 'today' ? { from: today, to: today } : { to: yesterday }
+  const resource = useData(`/cashier/reports/transactions?${queryString({ ...filters, ...dates, page })}`)
+  const result = resource.data?.[0]
+  const openBill = async (row) => { setError(null); try { setBill((await get(`/cashier/transactions/${row.id}/bill`)).data) } catch (requestError) { setError(requestError) } }
+  const changeView = (next) => { setView(next); setPage(1) }
+
+  return <><PageHeading eyebrow="Payment records" title={view === 'today' ? 'Transactions today' : 'Transaction history'} description={view === 'today' ? 'Open bills and payments created today (UTC).' : 'Bills and payments from yesterday and earlier.'} /><Tabs values={[["today", 'Today'], ["history", 'Transaction history']]} value={view} onChange={changeView} /><ErrorMessage error={error} /><form className="a-filters" onSubmit={(event) => { event.preventDefault(); setPage(1); setFilters({ ...draft }) }}><Field label="Search transactions" placeholder="Order, table, or transaction ID" value={draft.search} onChange={(event) => setDraft({ ...draft, search: event.target.value })} /><Field label="Status"><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option value="">All statuses</option><option value="open">Open</option><option value="partially_paid">Partially paid</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option></select></Field><Button icon="search">Apply</Button></form><DataState resource={resource}><Panel title={view === 'today' ? 'Today’s transactions' : 'Previous transactions'} className="a-table-panel"><Table headings={['Transaction', 'Order', 'Table', 'Total', 'Paid', 'Status', 'Action']} rows={(result?.data || []).map((row) => <tr key={row.id}><td><strong>{row.transaction_number}</strong></td><td>{row.order_numbers?.join(', ') || '—'}</td><td>Table {row.table?.table_number || '—'}</td><td>{currency(row.total_amount)}</td><td>{currency(row.paid_amount)}</td><td><Badge value={row.status} /></td><td><div className="a-actions"><Button onClick={() => openBill(row)}>{row.status === 'paid' ? 'View bill' : 'Open bill'}</Button>{row.receipt && <Button onClick={() => setReceiptId(row.receipt.id)}>Receipt</Button>}</div></td></tr>)} empty={view === 'today' ? 'No transactions have been opened today.' : 'No previous transactions found.'} /><Pagination meta={result?.meta} onPage={setPage} /></Panel></DataState>{bill && <PaymentDialog initialBill={bill} onClose={() => setBill(null)} onPaid={(receipt) => { setBill(null); resource.refresh(); if (receipt?.id) setReceiptId(receipt.id) }} />}{receiptId && <ReceiptPreview receiptId={receiptId} onClose={() => { setReceiptId(null); resource.refresh() }} />}</>
 }

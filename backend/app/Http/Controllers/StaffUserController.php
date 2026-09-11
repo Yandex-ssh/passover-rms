@@ -7,6 +7,8 @@ use App\Http\Requests\StoreStaffUserRequest;
 use App\Http\Requests\UpdateStaffUserRequest;
 use App\Http\Resources\StaffUserResource;
 use App\Models\User;
+use App\Models\Order;
+use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -69,6 +71,11 @@ class StaffUserController extends Controller
         if ($user->role === 'admin' && $user->is_active
             && User::query()->where('role', 'admin')->where('is_active', true)->count() <= 1) {
             abort(422, 'At least one active Admin account must remain.');
+        }
+
+        if (Order::query()->where('confirmed_by', $user->id)->exists()
+            || Payment::query()->where('processed_by', $user->id)->exists()) {
+            abort(422, 'This staff account is referenced by order or payment history. Deactivate it instead.');
         }
 
         $user->delete();

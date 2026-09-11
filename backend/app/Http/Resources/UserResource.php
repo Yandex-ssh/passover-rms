@@ -15,6 +15,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'role' => $this->role,
             'is_active' => $this->is_active,
+            'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
 }

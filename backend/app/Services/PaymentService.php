@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DiningTransaction;
 use App\Models\Payment;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -23,9 +24,10 @@ class PaymentService
      */
     public function recordCashPayment(
         DiningTransaction $transaction,
-        array $data
+        array $data,
+        User $actor
     ): array {
-        return DB::transaction(function () use ($transaction, $data): array {
+        return DB::transaction(function () use ($transaction, $data, $actor): array {
             $lockedTransaction = $this->lockTransaction($transaction);
             $receivedInCents = $this->decimalToCents($data['amount_received']);
             $existing = $this->findIdempotentPayment(
@@ -65,6 +67,7 @@ class PaymentService
                 'dining_transaction_id' => $lockedTransaction->id,
                 'payment_number' => $this->generatePaymentNumber(),
                 'payment_method' => 'cash',
+                'processed_by' => $actor->id,
                 'amount' => $this->formatCents($appliedInCents),
                 'amount_received' => $this->formatCents($receivedInCents),
                 'change_amount' => $this->formatCents($changeInCents),
@@ -96,9 +99,10 @@ class PaymentService
      */
     public function recordGcashPayment(
         DiningTransaction $transaction,
-        array $data
+        array $data,
+        User $actor
     ): array {
-        return DB::transaction(function () use ($transaction, $data): array {
+        return DB::transaction(function () use ($transaction, $data, $actor): array {
             $lockedTransaction = $this->lockTransaction($transaction);
             $amountInCents = $this->decimalToCents($data['amount']);
             $referenceNumber = trim($data['reference_number']);
@@ -156,6 +160,7 @@ class PaymentService
                 'dining_transaction_id' => $lockedTransaction->id,
                 'payment_number' => $this->generatePaymentNumber(),
                 'payment_method' => 'gcash',
+                'processed_by' => $actor->id,
                 'amount' => $this->formatCents($amountInCents),
                 'amount_received' => null,
                 'change_amount' => null,

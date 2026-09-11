@@ -90,6 +90,28 @@ class CustomerOrderStatusApiTest extends TestCase
             ->assertOk()->assertJsonPath('data.status', 'confirmed');
     }
 
+    public function test_status_polling_does_not_consume_chatbot_or_login_rate_limits(): void
+    {
+        $order = $this->createOrder('pending');
+        $statusUrl = "/api/customer/orders/{$order->tracking_token}/status";
+
+        for ($i = 0; $i < 60; $i++) {
+            $this->getJson($statusUrl)->assertOk();
+        }
+        $this->getJson($statusUrl)->assertStatus(429);
+
+        // Validation failures still consume their own endpoint's allowance.
+        for ($i = 0; $i < 30; $i++) {
+            $this->postJson('/api/customer/chatbot', [])->assertUnprocessable();
+        }
+        $this->postJson('/api/customer/chatbot', [])->assertStatus(429);
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson('/api/login', [])->assertUnprocessable();
+        }
+        $this->postJson('/api/login', [])->assertStatus(429);
+    }
+
     public function test_status_endpoint_is_public_read_only_and_does_not_mutate_business_data(): void
     {
         $order = $this->createOrder('pending');

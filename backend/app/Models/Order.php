@@ -58,4 +58,9 @@ class Order extends Model
     {
         return $this->hasOne(KitchenTicket::class);
     }
+
+    public function confirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
 }

@@ -23,3 +23,20 @@ export function useData(...paths) {
 }
 
 export function downloadJson(name, data) { const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
+
+export function downloadExcel(name, report) {
+  const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
+  const rows = [['Pass-over Cafe report'], ['Period from', report.from, 'Period to', report.to], [], ['Sales summary', 'Value'], ['Total sales', report.sales?.total_sales], ['Transactions', report.sales?.transaction_count], ['Average transaction value', report.sales?.average_transaction_value], ['Items sold', report.sales?.item_quantity], [], ['Daily sales', 'Total']]
+  ;(report.sales?.daily_sales || []).forEach((row) => rows.push([row.date, row.total]))
+  rows.push([], ['Best-selling items', 'Quantity sold'])
+  ;(report.menu_items || []).forEach((item) => rows.push([item.name, item.quantity_sold]))
+  rows.push([], ['Inventory', 'Low stock', 'Out of stock', 'Available'])
+  ;(report.inventory || []).forEach((item) => rows.push([item.name, item.is_low_stock ? 'Yes' : 'No', item.is_out_of_stock ? 'Yes' : 'No', item.is_available ? 'Yes' : 'No']))
+  const csv = '\ufeff' + rows.map((row) => row.map(escape).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

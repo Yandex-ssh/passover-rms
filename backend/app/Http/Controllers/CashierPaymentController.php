@@ -22,7 +22,8 @@ class CashierPaymentController extends Controller
     ): JsonResponse {
         $result = $this->paymentService->recordCashPayment(
             $diningTransaction,
-            $request->validated()
+            $request->validated(),
+            $request->user()
         );
 
         return response()->json([
@@ -37,7 +38,8 @@ class CashierPaymentController extends Controller
     ): JsonResponse {
         $result = $this->paymentService->recordGcashPayment(
             $diningTransaction,
-            $request->validated()
+            $request->validated(),
+            $request->user()
         );
 
         return response()->json([

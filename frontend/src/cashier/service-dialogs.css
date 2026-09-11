@@ -1,0 +1,19 @@
+.cashier-entry-items{display:grid;gap:14px;max-height:45vh;overflow:auto}
+.cashier-entry-item{display:grid;grid-template-columns:1fr 150px;gap:10px;border-bottom:1px solid var(--a-line);padding:12px 0}
+.cashier-entry-item small{display:block;color:var(--a-muted);margin-top:5px}
+.cashier-entry-item>.a-field:last-child:not(:nth-child(2)){grid-column:1/-1}
+.cashier-kitchen-slip{max-width:76mm;margin:auto;padding:12px;font-family:ui-monospace,monospace;overflow-wrap:anywhere;color:#000;background:#fff}
+.cashier-slip-heading{text-align:center;border-bottom:1px dashed #000;padding-bottom:10px}
+.cashier-kitchen-slip h2{font-size:17px}
+.cashier-kitchen-slip ul{list-style:none;padding:0;border-top:1px dashed #000;border-bottom:1px dashed #000}
+.cashier-kitchen-slip li{padding:12px 0}
+.cashier-kitchen-slip li p{margin:5px 0;white-space:pre-wrap}
+.cashier-kitchen-slip section p{white-space:pre-wrap}
+.cashier-print-document{display:none}
+@media print{
+  body:has(>.cashier-print-document)>:not(.cashier-print-document){display:none!important}
+  body:has(>.cashier-print-document) dialog{display:none!important}
+  .cashier-print-document{display:block!important}
+  .cashier-kitchen-slip{padding:0}
+}
+@media(max-width:480px){.cashier-entry-item{grid-template-columns:1fr 105px}}

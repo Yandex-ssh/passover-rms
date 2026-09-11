@@ -23,6 +23,12 @@ class OrderResource extends JsonResource
 
             'status' => $this->status,
 
+            'kitchen_ticket' => $this->whenLoaded('kitchenTicket', fn () => $this->kitchenTicket ? [
+                'id' => $this->kitchenTicket->id,
+                'ticket_number' => $this->kitchenTicket->ticket_number,
+                'print_count' => $this->kitchenTicket->print_count,
+            ] : null),
+
             'subtotal' => $this->subtotal,
 
             'customer_note' => $this->customer_note,

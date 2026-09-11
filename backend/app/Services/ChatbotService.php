@@ -11,6 +11,7 @@ class ChatbotService
     public function __construct(
         private readonly RestaurantContextService $context,
         private readonly AiProviderService $provider,
+        private readonly BestSellingService $bestSelling,
     ) {}
 
     public function ask(string $question): array
@@ -34,6 +35,10 @@ class ChatbotService
         $categories = $this->context->activeCategories();
         $items = $this->context->matchingItems($question, $categories);
         $matchedCategories = $this->context->matchingCategories($question, $categories);
+
+        if ($this->isBestSellerQuestion($lower)) {
+            return $this->answer($this->bestSellerAnswer($language, $matchedCategories));
+        }
 
         if ($this->isPaymentQuestion($lower)) {
             return $this->answer($this->paymentAnswer($language));
@@ -64,7 +69,7 @@ class ChatbotService
 
     private function isRestaurantQuestion(string $question): bool
     {
-        return $this->hasAny($question, [
+        return $this->isBestSellerQuestion($question) || $this->hasAny($question, [
             'menu', 'food', 'drink', 'coffee', 'price', 'available', 'availability', 'order', 'pay', 'payment', 'cash', 'gcash', 'qr', 'table', 'restaurant', 'cafe', 'category', 'have', 'latte', 'burger',
             'pagkaon', 'inumin', 'inom', 'kape', 'magkano', 'tagpila', 'pila', 'unsa', 'naa', 'naay', 'available pa', 'pag-order', 'orderon', 'unsaon', 'bayad', 'pwede',
         ]) || $this->context->containsMenuItem($question);
@@ -103,6 +108,32 @@ class ChatbotService
     private function isRecommendationQuestion(string $question): bool
     {
         return $this->hasAny($question, ['recommend', 'suggest', 'under', 'budget', 'barato', 'murag', 'ma-recommend']);
+    }
+
+    private function isBestSellerQuestion(string $question): bool
+    {
+        return $this->hasAny($question, ['best seller', 'best-sell', 'best sell', 'bestsell', 'popular', 'mabenta', 'halinon']);
+    }
+
+    private function bestSellerAnswer(string $language, Collection $categories): string
+    {
+        $today = now('UTC');
+        $ranked = $this->bestSelling->ranked($today->copy()->subDays(29)->toDateString(), $today->toDateString(), true, $categories->pluck('id')->all());
+        // Public answers deliberately omit sales counts, amounts, staff and payment data.
+        $names = implode(', ', array_column(array_slice($ranked, 0, 5), 'name'));
+        if ($names === '') {
+            return match ($language) {
+                'tagalog' => 'Wala pang sapat na verified sales history sa nakaraang 30 araw para magrekomenda ng available na best sellers.',
+                'bisaya' => 'Wala pay igo nga verified sales history sa miaging 30 ka adlaw para makarekomenda og available nga best sellers.',
+                default => 'There is not enough verified sales history from the last 30 days to recommend currently available best sellers.',
+            };
+        }
+
+        return match ($language) {
+            'tagalog' => "Ito ang available na best sellers batay sa dami ng nabenta sa fully paid transactions sa nakaraang 30 araw: {$names}.",
+            'bisaya' => "Mao ni ang available nga best sellers base sa gidaghanon nga nabaligya sa fully paid transactions sa miaging 30 ka adlaw: {$names}.",
+            default => "Currently available best sellers by units sold in fully paid transactions over the last 30 days: {$names}.",
+        };
     }
 
     /** @param Collection<int, MenuItem> $items */

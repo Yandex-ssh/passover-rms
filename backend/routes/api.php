@@ -6,6 +6,8 @@ use App\Http\Controllers\CashierBillingController;
 use App\Http\Controllers\CashierMenuController;
 use App\Http\Controllers\CashierOrderController;
 use App\Http\Controllers\CashierPaymentController;
+use App\Http\Controllers\CashierTableOrderController;
+use App\Http\Controllers\TableSessionController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerChatbotController;
 use App\Http\Controllers\CustomerOrderController;
@@ -25,11 +27,11 @@ use App\Http\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['web', 'throttle:10,1'])->post('/login', [AuthController::class, 'login']);
+Route::middleware(['web', 'throttle:10,1,login:'])->post('/login', [AuthController::class, 'login']);
 Route::middleware(['web', 'auth:sanctum', 'active'])->group(function (): void {
     Route::get('/user', fn (Request $request) => response()->json(['data' => new UserResource($request->user()), 'success' => true]));
     Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);
-    Route::post('/profile/password', [ProfileController::class, 'password'])->middleware('throttle:6,1');
+    Route::post('/profile/password', [ProfileController::class, 'password'])->middleware('throttle:6,1,profile-password:');
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
@@ -42,8 +44,8 @@ Route::get('customer/tables/{qrToken}', [CustomerTableController::class, 'show']
 Route::post('customer/tables/{qrToken}/orders', [CustomerOrderController::class, 'store']);
 Route::get('customer/orders/{trackingToken}/status', [CustomerOrderStatusController::class, 'show'])
     ->whereUuid('trackingToken')
-    ->middleware('throttle:60,1');
-Route::post('customer/chatbot', [CustomerChatbotController::class, 'store'])->middleware('throttle:30,1');
+    ->middleware('throttle:60,1,order-status:');
+Route::post('customer/chatbot', [CustomerChatbotController::class, 'store'])->middleware('throttle:30,1,chatbot:');
 
 Route::middleware(['web', 'auth:sanctum', 'active', 'role:admin'])->group(function (): void {
     Route::get('admin/orders', [AdminOrderController::class, 'index']);
@@ -75,6 +77,8 @@ Route::middleware(['web', 'auth:sanctum', 'active', 'role:admin'])->group(functi
 Route::middleware(['web', 'auth:sanctum', 'active', 'role:cashier'])->group(function (): void {
     Route::get('cashier/dashboard', DashboardController::class);
     Route::get('cashier/tables', [RestaurantTableController::class, 'index']);
+    Route::post('cashier/tables/{restaurantTable}/orders', [CashierTableOrderController::class, 'store']);
+    Route::post('cashier/table-sessions/{tableSession}/close', [TableSessionController::class, 'close']);
     Route::get('cashier/tables/{restaurantTable}/qr', [RestaurantTableController::class, 'qr']);
     Route::get('cashier/menu-items', [CashierMenuController::class, 'index']);
     Route::put('cashier/menu-items/{menuItem}/availability', [CashierMenuController::class, 'updateAvailability']);

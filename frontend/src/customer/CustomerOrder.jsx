@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError, get, post } from '../api'
+import { SERVICE_POLL_INTERVAL } from '../api/usePollingData'
 import './customer.css'
 
 const unwrap = (body) => body?.data ?? body
@@ -257,7 +258,10 @@ export default function CustomerOrder({ token }) {
     if (!submitted?.tracking_token) return undefined
     let active = true
     let timer
+    let pending = false
     const check = async () => {
+      if (pending) return
+      pending = true
       try {
         const current = unwrap(await get(`/customer/orders/${submitted.tracking_token}/status`))
         if (!active) return
@@ -271,9 +275,9 @@ export default function CustomerOrder({ token }) {
         if (terminalStatuses.includes(current.status)) clearInterval(timer)
       } catch (trackingRequestError) {
         if (active) setTrackingError(trackingRequestError instanceof ApiError && trackingRequestError.status === 404 ? 'Order tracking is no longer available.' : 'The latest status could not be loaded. We will keep trying.')
-      }
+      } finally { pending = false }
     }
-    timer = setInterval(check, 5000)
+    timer = setInterval(check, SERVICE_POLL_INTERVAL)
     check()
     return () => { active = false; clearInterval(timer) }
   }, [submitted?.tracking_token, trackingKey])
